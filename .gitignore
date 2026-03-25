@@ -1,0 +1,15 @@
+# Python-generated files
+staticfiles/
+db.sqlite3  
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+.env
+uploads/
+media/uploads/

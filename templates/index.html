@@ -1,0 +1,1161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Metal Sound Detector – Dashboard</title>
+  <meta name="description" content="Real-time metal impact sound analysis dashboard using AI and Librosa" />
+
+  <!-- Google Font -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+  <!-- Chart.js Zoom Plugin -->
+  <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.2.0/dist/chartjs-plugin-zoom.min.js"></script>
+
+  <style>
+    /* ===== DESIGN SYSTEM ===== */
+    :root {
+      --bg: #0a0a0a;
+      --bg-surface: #111113;
+      --bg-panel: rgba(20, 20, 24, 0.85);
+      --bg-panel-hover: rgba(30, 30, 36, 0.95);
+      --border: rgba(255,255,255,0.06);
+      --border-accent: rgba(0,255,136,0.15);
+      --text: #e8e8ec;
+      --text-dim: #888;
+      --text-muted: #555;
+      --accent: #00ff88;
+      --accent-dim: rgba(0,255,136,0.15);
+      --accent-glow: rgba(0,255,136,0.3);
+      --red: #ff3366;
+      --red-dim: rgba(255,51,102,0.15);
+      --warning: #ffcc00;
+      --blue: #3399ff;
+      --pink: #ff3366;
+      --orange: #ff9900;
+      --purple: #a855f7;
+      --radius: 12px;
+      --radius-lg: 16px;
+      --transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html { font-size: 16px; }
+
+    body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ===== LANDING PHASE ===== */
+    #landing {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 40px 24px;
+      text-align: center;
+      transition: opacity 0.5s ease, transform 0.5s ease;
+    }
+    #landing.hidden {
+      opacity: 0;
+      transform: translateY(-30px);
+      pointer-events: none;
+      position: absolute;
+    }
+
+    .landing-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 16px;
+      background: var(--accent-dim);
+      border: 1px solid var(--border-accent);
+      border-radius: 24px;
+      font-size: 0.8rem;
+      font-weight: 500;
+      color: var(--accent);
+      margin-bottom: 32px;
+      letter-spacing: 0.5px;
+    }
+    .landing-badge .dot {
+      width: 6px; height: 6px;
+      background: var(--accent);
+      border-radius: 50%;
+      animation: blink 2s infinite;
+    }
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+
+    .landing-title {
+      font-size: clamp(2.5rem, 6vw, 4.5rem);
+      font-weight: 800;
+      letter-spacing: -2px;
+      line-height: 1.1;
+      margin-bottom: 16px;
+      background: linear-gradient(135deg, #fff 0%, var(--accent) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .landing-subtitle {
+      font-size: 1.1rem;
+      color: var(--text-dim);
+      max-width: 520px;
+      margin-bottom: 48px;
+      line-height: 1.6;
+    }
+
+    /* Record button */
+    .record-btn {
+      position: relative;
+      width: 160px; height: 160px;
+      border: none;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--accent) 0%, #00cc66 100%);
+      color: #000;
+      font-family: var(--font);
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: var(--transition);
+      box-shadow: 0 0 40px var(--accent-glow), 0 8px 32px rgba(0,0,0,0.4);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      z-index: 10;
+    }
+    .record-btn:hover {
+      transform: scale(1.05);
+      box-shadow: 0 0 60px var(--accent-glow), 0 8px 40px rgba(0,0,0,0.5);
+    }
+    .record-btn:active { transform: scale(0.97); }
+    .record-btn .icon { font-size: 2rem; }
+    .record-btn .label { font-size: 0.8rem; letter-spacing: 2px; text-transform: uppercase; }
+
+    .record-btn.recording {
+      background: linear-gradient(135deg, var(--red) 0%, #cc2255 100%);
+      box-shadow: 0 0 40px var(--red-dim), 0 8px 32px rgba(0,0,0,0.4);
+      animation: pulse 1.5s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.06); }
+    }
+
+    /* Ring animation */
+    .record-btn::before {
+      content: '';
+      position: absolute;
+      inset: -12px;
+      border-radius: 50%;
+      border: 2px solid var(--accent);
+      opacity: 0;
+      transition: var(--transition);
+    }
+    .record-btn.recording::before {
+      border-color: var(--red);
+      opacity: 1;
+      animation: ring-pulse 1.5s infinite;
+    }
+    @keyframes ring-pulse {
+      0% { transform: scale(1); opacity: 0.6; }
+      100% { transform: scale(1.3); opacity: 0; }
+    }
+
+    .landing-timer {
+      margin-top: 24px;
+      font-size: 1.3rem;
+      font-weight: 600;
+      color: var(--warning);
+      min-height: 32px;
+    }
+    .landing-status {
+      margin-top: 8px;
+      font-size: 0.95rem;
+      color: var(--text-dim);
+      min-height: 24px;
+    }
+
+    /* Waveform canvas (landing) */
+    .landing-waveform {
+      margin-top: 32px;
+      width: 100%;
+      max-width: 480px;
+      height: 100px;
+      background: var(--bg-surface);
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+    }
+
+    /* ===== DASHBOARD PHASE ===== */
+    #dashboard {
+      display: none;
+      opacity: 0;
+      min-height: 100vh;
+    }
+    #dashboard.visible {
+      display: block;
+      animation: fadeIn 0.6s ease forwards;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Top bar */
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 28px;
+      background: var(--bg-surface);
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      backdrop-filter: blur(16px);
+    }
+    .topbar-left {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .topbar-logo {
+      font-size: 1.1rem;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+    }
+    .topbar-logo span { color: var(--accent); }
+    .topbar-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.75rem;
+      font-weight: 500;
+      color: var(--accent);
+      padding: 4px 12px;
+      background: var(--accent-dim);
+      border-radius: 20px;
+    }
+    .topbar-status .dot {
+      width: 5px; height: 5px;
+      background: var(--accent);
+      border-radius: 50%;
+    }
+    .topbar-right {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .btn-new {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 18px;
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 0.82rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: var(--transition);
+    }
+    .btn-new:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* Dashboard layout */
+    .dash-layout {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      min-height: calc(100vh - 49px);
+    }
+
+    /* Sidebar */
+    .sidebar {
+      background: var(--bg-surface);
+      border-right: 1px solid var(--border);
+      padding: 24px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    .sidebar-section {
+      padding: 16px;
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+    }
+    .sidebar-section-title {
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1.2px;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+    }
+
+    /* Prediction card */
+    .prediction-result {
+      text-align: center;
+    }
+    .prediction-metal {
+      font-size: 2.8rem;
+      font-weight: 800;
+      color: var(--accent);
+      letter-spacing: -1px;
+      text-shadow: 0 0 30px var(--accent-glow);
+      line-height: 1.2;
+    }
+    .prediction-label {
+      font-size: 0.8rem;
+      color: var(--text-dim);
+      margin-bottom: 4px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .confidence-bar-wrap {
+      margin-top: 16px;
+    }
+    .confidence-bar-bg {
+      height: 6px;
+      background: rgba(255,255,255,0.06);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .confidence-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), #00cc66);
+      border-radius: 4px;
+      transition: width 1s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .confidence-value {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--text);
+      margin-top: 6px;
+    }
+
+    /* Audio info */
+    .audio-info-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .audio-info-item {
+      text-align: center;
+      padding: 8px 4px;
+      background: rgba(255,255,255,0.02);
+      border-radius: 8px;
+    }
+    .audio-info-val {
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: var(--text);
+      line-height: 1.3;
+    }
+    .audio-info-label {
+      font-size: 0.65rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    /* Sidebar mini waveform */
+    .mini-waveform {
+      width: 100%;
+      height: 64px;
+      background: #000;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+    }
+
+    /* Main content */
+    .main-content {
+      padding: 24px;
+      overflow-y: auto;
+    }
+
+    /* Charts grid */
+    .charts-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+    }
+
+    .chart-panel {
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 16px;
+      transition: var(--transition);
+      cursor: pointer;
+      position: relative;
+    }
+    .chart-panel:hover {
+      border-color: rgba(255,255,255,0.12);
+      background: var(--bg-panel-hover);
+    }
+    .chart-panel.expanded {
+      grid-column: 1 / -1;
+      z-index: 10;
+    }
+    .chart-panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    .chart-title {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .chart-title .color-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+    }
+    .chart-actions {
+      display: flex;
+      gap: 6px;
+    }
+    .chart-action-btn {
+      width: 28px; height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text-muted);
+      font-size: 0.75rem;
+      cursor: pointer;
+      transition: var(--transition);
+    }
+    .chart-action-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .chart-canvas-wrap {
+      position: relative;
+      height: 220px;
+      transition: height var(--transition);
+    }
+    .chart-panel.expanded .chart-canvas-wrap { height: 400px; }
+    .chart-canvas-wrap canvas { border-radius: 8px; }
+
+    /* Spectrogram uses a dedicated canvas (no Chart.js) */
+    .spectrogram-canvas {
+      width: 100%;
+      height: 100%;
+      border-radius: 8px;
+    }
+
+    /* Expand hint */
+    .chart-hint {
+      position: absolute;
+      bottom: 8px;
+      right: 12px;
+      font-size: 0.65rem;
+      color: var(--text-muted);
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+    .chart-panel:hover .chart-hint { opacity: 1; }
+
+    /* ===== PROCESSING OVERLAY ===== */
+    #processingOverlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(10,10,10,0.92);
+      z-index: 1000;
+      justify-content: center;
+      align-items: center;
+      flex-direction: column;
+      gap: 24px;
+    }
+    #processingOverlay.visible { display: flex; }
+    .spinner {
+      width: 56px; height: 56px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .processing-text {
+      font-size: 1.1rem;
+      font-weight: 500;
+      color: var(--text-dim);
+    }
+
+    /* ===== RESPONSIVE ===== */
+    @media (max-width: 900px) {
+      .dash-layout { grid-template-columns: 1fr; }
+      .sidebar {
+        flex-direction: row;
+        flex-wrap: wrap;
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+        padding: 16px;
+        gap: 12px;
+      }
+      .sidebar-section { flex: 1; min-width: 200px; }
+      .charts-grid { grid-template-columns: 1fr; }
+      .chart-canvas-wrap { height: 200px; }
+    }
+    @media (max-width: 600px) {
+      .topbar { padding: 10px 16px; }
+      .topbar-logo { font-size: 0.95rem; }
+      .main-content { padding: 16px; }
+      .record-btn { width: 130px; height: 130px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- =========== PHASE 1: LANDING =========== -->
+  <div id="landing">
+    <div class="landing-badge">
+      <span class="dot"></span>
+      System Ready
+    </div>
+    <h1 class="landing-title">Metal Sound<br>Detector</h1>
+    <p class="landing-subtitle">Record a 5-second audio sample. AI-powered analysis will classify the metal impact and generate interactive signal visualizations.</p>
+
+    <button class="record-btn" id="recordBtn">
+      <span class="icon">⏺</span>
+      <span class="label">Record 5s</span>
+    </button>
+
+    <div class="landing-timer" id="timer"></div>
+    <div class="landing-status" id="status"></div>
+    <canvas class="landing-waveform" id="waveform"></canvas>
+  </div>
+
+  <!-- =========== PROCESSING OVERLAY =========== -->
+  <div id="processingOverlay">
+    <div class="spinner"></div>
+    <div class="processing-text">Analyzing audio signal…</div>
+  </div>
+
+  <!-- =========== PHASE 2: DASHBOARD =========== -->
+  <div id="dashboard">
+    <!-- Top Bar -->
+    <div class="topbar">
+      <div class="topbar-left">
+        <div class="topbar-logo">Metal Sound <span>Detector</span> – Live Analysis</div>
+        <div class="topbar-status"><span class="dot"></span> Analysis Complete</div>
+      </div>
+      <div class="topbar-right">
+        <button class="btn-new" id="newRecordingBtn">⏺ New Recording</button>
+      </div>
+    </div>
+
+    <div class="dash-layout">
+      <!-- Sidebar -->
+      <aside class="sidebar">
+        <!-- Prediction -->
+        <div class="sidebar-section prediction-result">
+          <div class="sidebar-section-title">Prediction</div>
+          <div class="prediction-label">Detected Metal</div>
+          <div class="prediction-metal" id="predMetal">—</div>
+          <div class="confidence-bar-wrap">
+            <div class="confidence-bar-bg">
+              <div class="confidence-bar-fill" id="confBar" style="width:0%"></div>
+            </div>
+            <div class="confidence-value">Confidence: <span id="confVal">—</span></div>
+          </div>
+        </div>
+
+        <!-- Audio Info -->
+        <div class="sidebar-section">
+          <div class="sidebar-section-title">Audio Info</div>
+          <div class="audio-info-grid">
+            <div class="audio-info-item">
+              <div class="audio-info-val" id="infoSR">—</div>
+              <div class="audio-info-label">Sample Rate</div>
+            </div>
+            <div class="audio-info-item">
+              <div class="audio-info-val" id="infoDur">—</div>
+              <div class="audio-info-label">Duration</div>
+            </div>
+            <div class="audio-info-item">
+              <div class="audio-info-val" id="infoPeak">—</div>
+              <div class="audio-info-label">Peak Amp</div>
+            </div>
+            <div class="audio-info-item">
+              <div class="audio-info-val" id="infoSamples">—</div>
+              <div class="audio-info-label">Samples</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Mini waveform -->
+        <div class="sidebar-section">
+          <div class="sidebar-section-title">Waveform Preview</div>
+          <canvas class="mini-waveform" id="miniWaveform"></canvas>
+        </div>
+      </aside>
+
+      <!-- Main Content -->
+      <main class="main-content">
+        <div class="charts-grid">
+          <!-- 1. Waveform -->
+          <div class="chart-panel" id="panel-waveform">
+            <div class="chart-panel-header">
+              <div class="chart-title"><span class="color-dot" style="background:#3399ff"></span> Waveform</div>
+              <div class="chart-actions">
+                <button class="chart-action-btn reset-zoom-btn" title="Reset Zoom">↺</button>
+                <button class="chart-action-btn expand-btn" title="Expand">⛶</button>
+              </div>
+            </div>
+            <div class="chart-canvas-wrap"><canvas id="chartWaveform"></canvas></div>
+            <span class="chart-hint">Click to expand · Scroll to zoom</span>
+          </div>
+
+          <!-- 2. Spectrogram -->
+          <div class="chart-panel" id="panel-spectrogram">
+            <div class="chart-panel-header">
+              <div class="chart-title"><span class="color-dot" style="background:#a855f7"></span> Spectrogram</div>
+              <div class="chart-actions">
+                <button class="chart-action-btn expand-btn" title="Expand">⛶</button>
+              </div>
+            </div>
+            <div class="chart-canvas-wrap"><canvas id="chartSpectrogram" class="spectrogram-canvas"></canvas></div>
+            <span class="chart-hint">Click to expand</span>
+          </div>
+
+          <!-- 3. RMS Energy -->
+          <div class="chart-panel" id="panel-rms">
+            <div class="chart-panel-header">
+              <div class="chart-title"><span class="color-dot" style="background:#ff3366"></span> RMS Energy</div>
+              <div class="chart-actions">
+                <button class="chart-action-btn reset-zoom-btn" title="Reset Zoom">↺</button>
+                <button class="chart-action-btn expand-btn" title="Expand">⛶</button>
+              </div>
+            </div>
+            <div class="chart-canvas-wrap"><canvas id="chartRMS"></canvas></div>
+            <span class="chart-hint">Click to expand · Scroll to zoom</span>
+          </div>
+
+          <!-- 4. FFT Spectrum -->
+          <div class="chart-panel" id="panel-fft">
+            <div class="chart-panel-header">
+              <div class="chart-title"><span class="color-dot" style="background:#00ff88"></span> FFT Spectrum</div>
+              <div class="chart-actions">
+                <button class="chart-action-btn reset-zoom-btn" title="Reset Zoom">↺</button>
+                <button class="chart-action-btn expand-btn" title="Expand">⛶</button>
+              </div>
+            </div>
+            <div class="chart-canvas-wrap"><canvas id="chartFFT"></canvas></div>
+            <span class="chart-hint">Click to expand · Scroll to zoom</span>
+          </div>
+
+          <!-- 5. Amplitude Distribution -->
+          <div class="chart-panel" id="panel-hist">
+            <div class="chart-panel-header">
+              <div class="chart-title"><span class="color-dot" style="background:#3399ff"></span> Amplitude Distribution</div>
+              <div class="chart-actions">
+                <button class="chart-action-btn reset-zoom-btn" title="Reset Zoom">↺</button>
+                <button class="chart-action-btn expand-btn" title="Expand">⛶</button>
+              </div>
+            </div>
+            <div class="chart-canvas-wrap"><canvas id="chartHist"></canvas></div>
+            <span class="chart-hint">Click to expand · Scroll to zoom</span>
+          </div>
+
+          <!-- 6. Moving RMS Envelope -->
+          <div class="chart-panel" id="panel-mrms">
+            <div class="chart-panel-header">
+              <div class="chart-title"><span class="color-dot" style="background:#ff9900"></span> Moving RMS Envelope</div>
+              <div class="chart-actions">
+                <button class="chart-action-btn reset-zoom-btn" title="Reset Zoom">↺</button>
+                <button class="chart-action-btn expand-btn" title="Expand">⛶</button>
+              </div>
+            </div>
+            <div class="chart-canvas-wrap"><canvas id="chartMRMS"></canvas></div>
+            <span class="chart-hint">Click to expand · Scroll to zoom</span>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- =========== SCRIPTS =========== -->
+  <script>
+    /* ——— DOM REFS ——— */
+    const landing       = document.getElementById('landing');
+    const dashboard     = document.getElementById('dashboard');
+    const overlay       = document.getElementById('processingOverlay');
+    const recordBtn     = document.getElementById('recordBtn');
+    const timerDiv      = document.getElementById('timer');
+    const statusDiv     = document.getElementById('status');
+    const waveCanvas    = document.getElementById('waveform');
+    const waveCtx       = waveCanvas.getContext('2d');
+    const newRecBtn     = document.getElementById('newRecordingBtn');
+
+    let recorder, animationId, audioContext, analyser, dataArray;
+    const chartInstances = {};
+
+    /* ——— CANVAS RESIZE ——— */
+    function resizeWaveCanvas() {
+      const rect = waveCanvas.getBoundingClientRect();
+      waveCanvas.width  = rect.width * window.devicePixelRatio;
+      waveCanvas.height = rect.height * window.devicePixelRatio;
+      waveCtx.scale(window.devicePixelRatio, window.devicePixelRatio);
+    }
+    window.addEventListener('resize', resizeWaveCanvas);
+    resizeWaveCanvas();
+
+    /* ——— LIVE WAVEFORM ——— */
+    function drawWaveform() {
+      animationId = requestAnimationFrame(drawWaveform);
+      analyser.getByteTimeDomainData(dataArray);
+      const w = waveCanvas.getBoundingClientRect().width;
+      const h = waveCanvas.getBoundingClientRect().height;
+
+      waveCtx.fillStyle = '#0a0a0a';
+      waveCtx.fillRect(0, 0, w, h);
+      waveCtx.lineWidth   = 1.5;
+      waveCtx.strokeStyle = '#00ff88';
+      waveCtx.beginPath();
+
+      const sliceW = w / dataArray.length;
+      let x = 0;
+      for (let i = 0; i < dataArray.length; i++) {
+        const v = dataArray[i] / 128.0;
+        const y = v * h / 2;
+        i === 0 ? waveCtx.moveTo(x, y) : waveCtx.lineTo(x, y);
+        x += sliceW;
+      }
+      waveCtx.lineTo(w, h / 2);
+      waveCtx.stroke();
+    }
+
+    /* ——— RECORD CLICK ——— */
+    recordBtn.addEventListener('click', async () => {
+      timerDiv.textContent = 'Recording: 5';
+      statusDiv.textContent = '';
+      recordBtn.disabled = true;
+      recordBtn.classList.add('recording');
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+        audioContext = new AudioContext();
+        analyser = audioContext.createAnalyser();
+        analyser.fftSize = 2048;
+        dataArray = new Uint8Array(analyser.frequencyBinCount);
+        const source = audioContext.createMediaStreamSource(stream);
+        source.connect(analyser);
+        drawWaveform();
+
+        recorder = new MediaRecorder(stream);
+        const chunks = [];
+        recorder.ondataavailable = e => chunks.push(e.data);
+        recorder.onstop = async () => {
+          const blob = new Blob(chunks, { type: 'audio/wav' });
+          statusDiv.textContent = '';
+          overlay.classList.add('visible');
+
+          // AJAX submit
+          const formData = new FormData();
+          formData.append('audio_file', blob, 'recording.wav');
+
+          try {
+            const resp = await fetch('/analyze/', { 
+              method: 'POST',
+              body: formData,
+            });
+            const data = await resp.json();
+            overlay.classList.remove('visible');
+            showDashboard(data);
+          } catch (err) {
+            overlay.classList.remove('visible');
+            statusDiv.textContent = 'Analysis failed: ' + err.message;
+            statusDiv.style.color = '#ff4444';
+          }
+        };
+
+        recorder.start();
+
+        let time = 5;
+        const interval = setInterval(() => {
+          time--;
+          timerDiv.textContent = `Recording: ${time}`;
+          if (time <= 0) clearInterval(interval);
+        }, 1000);
+
+        setTimeout(() => {
+          recorder.stop();
+          stream.getTracks().forEach(t => t.stop());
+          audioContext.close();
+          if (animationId) cancelAnimationFrame(animationId);
+          recordBtn.classList.remove('recording');
+          recordBtn.disabled = false;
+          timerDiv.textContent = '';
+          statusDiv.textContent = 'Processing…';
+        }, 5000);
+
+      } catch (err) {
+        statusDiv.textContent = 'Mic access denied!';
+        statusDiv.style.color = '#ff4444';
+        recordBtn.disabled = false;
+        recordBtn.classList.remove('recording');
+      }
+    });
+
+    /* ——— NEW RECORDING ——— */
+    newRecBtn.addEventListener('click', () => {
+      // Destroy charts
+      Object.values(chartInstances).forEach(c => { if (c && c.destroy) c.destroy(); });
+      for (const k in chartInstances) delete chartInstances[k];
+      // Reset UI
+      dashboard.classList.remove('visible');
+      landing.classList.remove('hidden');
+      timerDiv.textContent = '';
+      statusDiv.textContent = '';
+    });
+
+    /* ——— SHOW DASHBOARD ——— */
+    function showDashboard(data) {
+      // Switch phases
+      landing.classList.add('hidden');
+      setTimeout(() => {
+        dashboard.classList.add('visible');
+        populateDashboard(data);
+      }, 400);
+    }
+
+    function populateDashboard(data) {
+      const pred = data.prediction || {};
+      const analysis = data.analysis || {};
+      const info = analysis.audio_info || {};
+
+      // Prediction
+      document.getElementById('predMetal').textContent = pred.metal || 'N/A';
+      const conf = pred.confidence || 0;
+      document.getElementById('confVal').textContent = conf.toFixed(3);
+      setTimeout(() => {
+        document.getElementById('confBar').style.width = (conf * 100) + '%';
+      }, 100);
+
+      // Audio info
+      document.getElementById('infoSR').textContent = (info.sample_rate || 0).toLocaleString() + ' Hz';
+      document.getElementById('infoDur').textContent = (info.duration || 0) + ' s';
+      document.getElementById('infoPeak').textContent = (info.peak_amplitude || 0).toFixed(4);
+      document.getElementById('infoSamples').textContent = (info.num_samples || 0).toLocaleString();
+
+      // Mini waveform
+      drawMiniWaveform(analysis.waveform);
+
+      // Charts
+      renderWaveformChart(analysis.waveform);
+      renderSpectrogramChart(analysis.spectrogram);
+      renderRMSChart(analysis.rms_energy);
+      renderFFTChart(analysis.fft_spectrum);
+      renderHistChart(analysis.histogram);
+      renderMRMSChart(analysis.moving_rms);
+
+      // Wire up expand/reset buttons
+      wireChartPanelActions();
+    }
+
+    /* ——— CHART DEFAULTS ——— */
+    const chartDefaults = {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: { duration: 800, easing: 'easeOutQuart' },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: 'rgba(16,16,20,0.95)',
+          titleColor: '#fff',
+          bodyColor: '#ccc',
+          borderColor: 'rgba(255,255,255,0.08)',
+          borderWidth: 1,
+          cornerRadius: 8,
+          padding: 10,
+          bodyFont: { family: 'Inter', size: 12 },
+          titleFont: { family: 'Inter', size: 13, weight: 600 },
+        },
+        zoom: {
+          pan: { enabled: true, mode: 'x' },
+          zoom: {
+            wheel: { enabled: true },
+            pinch: { enabled: true },
+            mode: 'x',
+          }
+        }
+      },
+      scales: {
+        x: {
+          ticks: { color: '#666', font: { size: 10, family: 'Inter' }, maxTicksLimit: 10 },
+          grid: { color: 'rgba(255,255,255,0.04)' },
+          border: { color: 'rgba(255,255,255,0.08)' },
+        },
+        y: {
+          ticks: { color: '#666', font: { size: 10, family: 'Inter' }, maxTicksLimit: 8 },
+          grid: { color: 'rgba(255,255,255,0.04)' },
+          border: { color: 'rgba(255,255,255,0.08)' },
+        }
+      },
+      elements: {
+        point: { radius: 0 },
+        line: { tension: 0.1, borderWidth: 1.5 },
+      }
+    };
+
+    function makeLineChart(canvasId, labels, values, color, xLabel, yLabel) {
+      const ctx = document.getElementById(canvasId).getContext('2d');
+      const grad = ctx.createLinearGradient(0, 0, 0, 300);
+      grad.addColorStop(0, color + '33');
+      grad.addColorStop(1, color + '00');
+
+      const chart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: labels.map(v => typeof v === 'number' ? v.toFixed(3) : v),
+          datasets: [{
+            data: values,
+            borderColor: color,
+            backgroundColor: grad,
+            fill: true,
+          }]
+        },
+        options: {
+          ...JSON.parse(JSON.stringify(chartDefaults)),
+          scales: {
+            ...JSON.parse(JSON.stringify(chartDefaults.scales)),
+            x: {
+              ...JSON.parse(JSON.stringify(chartDefaults.scales.x)),
+              title: { display: true, text: xLabel, color: '#888', font: { size: 11, family: 'Inter' } }
+            },
+            y: {
+              ...JSON.parse(JSON.stringify(chartDefaults.scales.y)),
+              title: { display: true, text: yLabel, color: '#888', font: { size: 11, family: 'Inter' } }
+            }
+          },
+          plugins: {
+            ...chartDefaults.plugins,
+            zoom: {
+              pan: { enabled: true, mode: 'x' },
+              zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'x' }
+            }
+          }
+        }
+      });
+      return chart;
+    }
+
+    /* ——— MINI WAVEFORM ——— */
+    function drawMiniWaveform(waveData) {
+      if (!waveData) return;
+      const c = document.getElementById('miniWaveform');
+      const ctx = c.getContext('2d');
+      const rect = c.getBoundingClientRect();
+      c.width  = rect.width * 2;
+      c.height = rect.height * 2;
+      ctx.scale(2, 2);
+      const w = rect.width, h = rect.height;
+
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, w, h);
+
+      const amps = waveData.amplitudes;
+      const step = Math.max(1, Math.floor(amps.length / w));
+      ctx.strokeStyle = '#00ff88';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (let i = 0; i < w; i++) {
+        const idx = Math.min(i * step, amps.length - 1);
+        const y = (1 - (amps[idx] + 1) / 2) * h;
+        i === 0 ? ctx.moveTo(i, y) : ctx.lineTo(i, y);
+      }
+      ctx.stroke();
+    }
+
+    /* ——— 1. WAVEFORM ——— */
+    function renderWaveformChart(d) {
+      if (!d) return;
+      chartInstances.waveform = makeLineChart('chartWaveform', d.times, d.amplitudes, '#3399ff', 'Time (s)', 'Amplitude');
+    }
+
+    /* ——— 2. SPECTROGRAM (custom canvas heatmap) ——— */
+    function renderSpectrogramChart(d) {
+      if (!d) return;
+      const canvas = document.getElementById('chartSpectrogram');
+      const ctx = canvas.getContext('2d');
+      const wrap = canvas.parentElement;
+      const W = wrap.clientWidth;
+      const H = wrap.clientHeight;
+      canvas.width = W * 2;
+      canvas.height = H * 2;
+      ctx.scale(2, 2);
+
+      const mags = d.magnitudes;
+      const nFreq = mags.length;
+      const nTime = mags[0].length;
+
+      // Find min/max
+      let mn = Infinity, mx = -Infinity;
+      for (let f = 0; f < nFreq; f++) {
+        for (let t = 0; t < nTime; t++) {
+          if (mags[f][t] < mn) mn = mags[f][t];
+          if (mags[f][t] > mx) mx = mags[f][t];
+        }
+      }
+      const range = mx - mn || 1;
+
+      const cellW = W / nTime;
+      const cellH = H / nFreq;
+
+      for (let f = 0; f < nFreq; f++) {
+        for (let t = 0; t < nTime; t++) {
+          const val = (mags[f][t] - mn) / range; // 0..1
+          ctx.fillStyle = spectrogramColor(val);
+          // Flip vertically so low freq at bottom
+          ctx.fillRect(t * cellW, (nFreq - 1 - f) * cellH, Math.ceil(cellW) + 1, Math.ceil(cellH) + 1);
+        }
+      }
+
+      // Axis labels
+      ctx.fillStyle = '#888';
+      ctx.font = '10px Inter';
+      ctx.textAlign = 'left';
+      ctx.fillText('0 Hz', 4, H - 4);
+      ctx.fillText((d.frequencies[d.frequencies.length - 1] || 8000).toFixed(0) + ' Hz', 4, 14);
+      ctx.textAlign = 'right';
+      ctx.fillText((d.times[d.times.length - 1] || 5).toFixed(1) + 's', W - 4, H - 4);
+
+      // Store ref (not a Chart.js instance)
+      chartInstances.spectrogram = { canvas };
+    }
+
+    function spectrogramColor(val) {
+      // Viridis-inspired: dark purple → teal → yellow
+      if (val < 0.25) {
+        const t = val / 0.25;
+        const r = Math.round(68 * t);
+        const g = Math.round(1 + 50 * t);
+        const b = Math.round(84 + 80 * t);
+        return `rgb(${r},${g},${b})`;
+      } else if (val < 0.5) {
+        const t = (val - 0.25) / 0.25;
+        return `rgb(${Math.round(68 - 35*t)},${Math.round(51 + 120*t)},${Math.round(164 - 60*t)})`;
+      } else if (val < 0.75) {
+        const t = (val - 0.5) / 0.25;
+        return `rgb(${Math.round(33 + 90*t)},${Math.round(171 + 30*t)},${Math.round(104 - 50*t)})`;
+      } else {
+        const t = (val - 0.75) / 0.25;
+        return `rgb(${Math.round(123 + 130*t)},${Math.round(201 + 50*t)},${Math.round(54 - 30*t)})`;
+      }
+    }
+
+    /* ——— 3. RMS ENERGY ——— */
+    function renderRMSChart(d) {
+      if (!d) return;
+      chartInstances.rms = makeLineChart('chartRMS', d.times, d.values, '#ff3366', 'Time (s)', 'RMS');
+    }
+
+    /* ——— 4. FFT SPECTRUM ——— */
+    function renderFFTChart(d) {
+      if (!d) return;
+      chartInstances.fft = makeLineChart('chartFFT', d.frequencies, d.magnitudes, '#00ff88', 'Frequency (Hz)', 'Magnitude (dB)');
+    }
+
+    /* ——— 5. AMPLITUDE HISTOGRAM ——— */
+    function renderHistChart(d) {
+      if (!d) return;
+      const ctx = document.getElementById('chartHist').getContext('2d');
+      chartInstances.hist = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: d.bins.map(v => v.toFixed(3)),
+          datasets: [{
+            data: d.counts,
+            backgroundColor: '#3399ff88',
+            borderColor: '#3399ff',
+            borderWidth: 1,
+            borderRadius: 2,
+          }]
+        },
+        options: {
+          ...JSON.parse(JSON.stringify(chartDefaults)),
+          scales: {
+            ...JSON.parse(JSON.stringify(chartDefaults.scales)),
+            x: {
+              ...JSON.parse(JSON.stringify(chartDefaults.scales.x)),
+              title: { display: true, text: 'Amplitude', color: '#888', font: { size: 11, family: 'Inter' } }
+            },
+            y: {
+              ...JSON.parse(JSON.stringify(chartDefaults.scales.y)),
+              title: { display: true, text: 'Count', color: '#888', font: { size: 11, family: 'Inter' } }
+            }
+          },
+          plugins: {
+            ...chartDefaults.plugins,
+            zoom: {
+              pan: { enabled: true, mode: 'x' },
+              zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'x' }
+            }
+          }
+        }
+      });
+    }
+
+    /* ——— 6. MOVING RMS ——— */
+    function renderMRMSChart(d) {
+      if (!d) return;
+      chartInstances.mrms = makeLineChart('chartMRMS', d.times, d.values, '#ff9900', 'Time (s)', 'Amplitude');
+    }
+
+    /* ——— EXPAND / RESET ZOOM ——— */
+    function wireChartPanelActions() {
+      document.querySelectorAll('.expand-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const panel = btn.closest('.chart-panel');
+          panel.classList.toggle('expanded');
+          // Resize charts on expand
+          setTimeout(() => {
+            Object.values(chartInstances).forEach(c => { if (c && c.resize) c.resize(); });
+          }, 400);
+        });
+      });
+
+      document.querySelectorAll('.reset-zoom-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const panel = btn.closest('.chart-panel');
+          const canvasEl = panel.querySelector('canvas');
+          if (canvasEl) {
+            const key = Object.keys(chartInstances).find(k => {
+              const inst = chartInstances[k];
+              return inst && inst.canvas === canvasEl;
+            });
+            if (key && chartInstances[key].resetZoom) {
+              chartInstances[key].resetZoom();
+            }
+          }
+        });
+      });
+    }
+  </script>
+</body>
+</html>

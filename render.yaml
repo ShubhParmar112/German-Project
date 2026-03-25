@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: metal-sound-detector
+    runtime: python
+    plan: starter
+    buildCommand: "./build.sh"
+    startCommand: "gunicorn deploy_proj.wsgi:application"
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DEBUG
+        value: "0"
+      - key: PYTHON_VERSION
+        value: "3.12.3"
