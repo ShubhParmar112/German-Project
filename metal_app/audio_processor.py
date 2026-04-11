@@ -5,7 +5,7 @@ import librosa
 from tensorflow.keras.models import load_model
 from django.conf import settings
 
-MODEL_PATH = os.path.join(settings.BASE_DIR, 'metal_app', 'FINALtry_metal_prediction_MyData.h5')
+MODEL_PATH = os.path.join(settings.BASE_DIR, 'metal_app', 'FINAL_metal_classifier_melCNN.h5')
 SR = 16000
 FFT_SIZE = 4096
 
